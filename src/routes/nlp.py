@@ -139,3 +139,31 @@ async def search_index(request:Request,project_id:str,search_request:SearchReque
 
 
 
+@nlp_router.post("/index/answer/{project_id}")
+async def rag_answer(request:Request,project_id:str,search_request:SearchRequest):
+
+    project_model = request.app.project_model
+
+    project=await project_model.get_project_or_create_one(
+        project_id=project_id
+    )
+    
+    nlp_controller=request.app.nlp_controller 
+
+    response, full_prompt, chat_history=nlp_controller.answer_rag_question(project=project,query=search_request.text,limit=search_request.limit)
+
+    if not response:
+        return JSONResponse(
+            status.HTTP_400_BAD_REQUEST,
+            content={
+                "signal": ResponseSignal.ANSWER_GENERATION_FAILED.value
+            }
+        )
+
+    return JSONResponse(
+        content={
+            "signal": ResponseSignal.RAG_ANSWER_SUCCESS.value,
+            "answer": response,
+            "full_prompt":full_prompt
+        }
+    )

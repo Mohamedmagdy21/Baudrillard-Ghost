@@ -5,3 +5,7 @@ class DataBaseEnum(Enum):
     COLLECTION_PROJECT_NAME="projects"
     COLLECTION_CHUNK_NAME="chunks"
     COLLECTION_ASSET_NAME="assets"
+
+    ########### conversation ##########
+
+    COLLECTION_RESPONSES_HISTORY= "responses"

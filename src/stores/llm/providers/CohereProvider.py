@@ -16,6 +16,8 @@ class CohereProvider(LLMInterface):
         self.generation_model = None
         self.embedding_model = None
         self.embedding_dimensions = None
+
+        self.enums=CohereEnums
         
 
         self.logger = logging.getLogger(__name__)
@@ -104,18 +106,18 @@ class CohereProvider(LLMInterface):
             temperature=self.default_temperature
 
         response=self.client.chat(
-            model=self.model,
-            chat_history=chat_history,
-            messages=self.process_text(self,prompt),
+            model=self.generation_model,
+            #chat_history=chat_history,
+            messages=[{"role": "user", "content": self.process_text(prompt)}],
             temperature=temperature,
             max_tokens=max_output_tokens
 
         )  
 
-        if not response or len(response)==0:
+        if not response or not response.message.content:
             self.logger.error("Failed to generate text")
             return None
         
-        return response.text
+        return response.message.content[0].text
 
     

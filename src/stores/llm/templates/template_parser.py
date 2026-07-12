@@ -1,18 +1,19 @@
 import os
+import importlib
 
 class TemplateParser():
 
     def __init__(self,language:str=None,default_langauge:str="en"):
-        self.parentpath= os.dirname(os.file_path(os.path.abspath(__file__)))
+        self.parent_path = os.path.dirname(os.path.abspath(__file__))
         self.default_langauge=default_langauge
-        self.language=None
+        self.language=default_langauge
 
 
     def set_langauage(self,langauge): 
         if not langauge:
             return False
 
-        lang_path=os.path.join(self.parentpath,"lacales",langauge)  
+        lang_path=os.path.join(self.parent_path,"locales",langauge)  
 
         if not os.path.exists(lang_path):
             self.language=self.default_langauge
@@ -24,18 +25,17 @@ class TemplateParser():
 
     def get(self,group:str,key:str,vars:dict={}):
 
-        group_path=os.path.join(self.parentpath,"locales",self.language,f"{group}.py")  
+        group_path=os.path.join(self.parent_path,"locales",self.language,f"{group}.py")  
         targeted_langauge=self.language
 
         if not os.path.exists(group_path):
-            group_path= os.path.join(self.parentpath,"locales",self.default_langauge,f"{group}.py")       
+            group_path= os.path.join(self.parent_path,"locales",self.default_langauge,f"{group}.py")       
             targeted_langauge=self.default_langauge
         if not os.path.exists(group_path):
             return None
 
         # import group module
-        module=__import__(f"stores.llm.templates.locales.{targeted_langauge}.{group}",fromlist=[group])
-
+        module=importlib.import_module(f".locales.{targeted_langauge}.{group}", package=__package__)
         if not module:
             return None
 

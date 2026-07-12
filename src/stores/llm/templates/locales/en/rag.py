@@ -5,16 +5,13 @@ from string import Template
 
 ########## system ####
 
-system_prompt="\n".join([
-    "You are an assistant to generate a response for the user",
-    "You will be provided by a set of documents associated with the user's query",
-    "Generate a response based on the documents provided. ignore the documents that are not relevant to the user's query",
-    "You can apologize to the user if you are not able to generate response",
-    "You have to generate response in the same language as the user's query",
-    "Be polite and respectful to the user",
-    "Be precise and concise in your response. Avoid unnecessary information",
+system_prompt=Template("\n".join([
+    "You are an assistant that answers questions based on the provided documents.",
+    "You MUST answer directly using the documents. Do NOT apologize.",
+    "If the documents contain relevant information, synthesize it into an answer.",
+    "Be precise and concise.",
 
-])
+]))
 
 ####### user query##########
 user_query=Template(

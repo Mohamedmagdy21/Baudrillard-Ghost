@@ -16,6 +16,8 @@ class GlmProvider(LLMInterface):
         self.embedding_model = None
         self.embedding_dimensions = None
 
+        self.enums=OpenAiEnums
+
         
 
         self.logger = logging.getLogger(__name__)

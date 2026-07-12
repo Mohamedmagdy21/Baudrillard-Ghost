@@ -11,6 +11,7 @@ from src.stores.vectordb.VectorDBFactory import VectorDBFactory
 from src.models.AssetModel import AssetModel
 from src.models.ProjectModel import ProjectModel
 from src.models.ChunkModel import ChunkModel
+from src.models.ResponseModel import ResponseModel
 from src.stores.llm.templates.template_parser import TemplateParser
 from src.controllers.NLPController import NLPController
 
@@ -28,6 +29,9 @@ async def lifespan(app: FastAPI):
     app.project_model = await ProjectModel.create_instance(db_client=app.db_client)
     app.asset_model = await AssetModel.create_instance(db_client=app.db_client)
     app.chunk_model = await ChunkModel.create_instance(db_client=app.db_client)
+
+    # newly added for the LLM conversation history
+    app.response_model = await ResponseModel.create_instance(db_client=app.db_client)
 
     # This guarantees your app fails immediately if your local Docker/Atlas Mongo instance is offline
    
@@ -57,7 +61,7 @@ async def lifespan(app: FastAPI):
         
     )    
 
-    app.nlp_controller=NLPController(vectordb_client=app.db_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser)
+    app.nlp_controller=NLPController(vectordb_client=app.vectordb_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser)
 
 
 
