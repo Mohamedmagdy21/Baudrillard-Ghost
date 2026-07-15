@@ -19,3 +19,4 @@ class ResponseSignal(Enum):
     VECTOR_DB_SEARCH_SUCCESS="vectordb_search_success"
     ANSWER_GENERATION_FAILED="answer generation failed"
     RAG_ANSWER_SUCCESS="RAG_answer_success"
+    AGENT_REACHED_MAX_RETRIES= "agent_reached_max_retries"

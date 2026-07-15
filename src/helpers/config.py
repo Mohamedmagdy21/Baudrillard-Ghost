@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     GENERATION_MODEL:str=None
     EMBEDDING_MODEL:str=None
     EMBEDDING_MODEL_DIMENSIONS:int=None
-    DEFAULT_INPUT_MAX_CHARACTERS:int=None
+    DEFAULT_INPUT_MAX_TOKENS:int=None
     GENERATION_DEFAULT_MAX_TOKENS:int=None
     GENERATION_DEFAULT_TEMPERATURE:float=None
 
@@ -33,6 +33,13 @@ class Settings(BaseSettings):
 
     
     DEFAULT_LANGAUGE:str="en"
+
+    REWRITER_API_KEY:str
+    REWRITER_BASE_URL:str
+    REWRITER_MODEL:str
+
+    RETRY_THRESHOLD:float
+    MAX_RETRIES:int
 
 
 

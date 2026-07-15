@@ -51,19 +51,18 @@ class GlmProvider(LLMInterface):
 
         prompt = self.construct_prompt(system_prompt, user_prompt)    
 
-        response = self.client.responses.create(
+        response = self.client.chat.completions.create(
             model=self.generation_model,
-            input=prompt,
-            store=True,
-            max_output_tokens=max_output_tokens,
+            messages=prompt,
+            max_tokens=max_output_tokens,
             temperature=temperature,
         )
 
-        if not response.output_text or len(response.output_text) == 0:
+        if not response or not response.choices:
             self.logger.error("Failed to generate text")
             return None
 
-        return response.output_text
+        return response.choices[0].message.content
 
     def embed_text(self, text: str,document_type:str=None) -> str:
 
@@ -97,7 +96,7 @@ class GlmProvider(LLMInterface):
             "content": system_prompt
             },
             {
-            "role": OpenAiEnums.User.value,
+            "role": OpenAiEnums.USER.value,
             "content": self.process_text(user_prompt)
             }
             ]

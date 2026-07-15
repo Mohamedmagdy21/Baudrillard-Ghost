@@ -14,6 +14,7 @@ from src.models.ChunkModel import ChunkModel
 from src.models.ResponseModel import ResponseModel
 from src.stores.llm.templates.template_parser import TemplateParser
 from src.controllers.NLPController import NLPController
+from src.agents.providers.OpenAiProvider import OpenAiAgent
 
 
 
@@ -61,8 +62,20 @@ async def lifespan(app: FastAPI):
         
     )    
 
-    app.nlp_controller=NLPController(vectordb_client=app.vectordb_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser)
+    app.query_rewriter_agent = OpenAiAgent(
+        api_key=settings.REWRITER_API_KEY,
+        generation_client=settings.REWRITER_MODEL,  # for the model name
+        embedding_client=app.embedding_client,
+        vectordb_client=app.vectordb_client,
+        base_url=settings.REWRITER_BASE_URL,
+        max_retries=settings.MAX_RETRIES,
+        retry_threshold=settings.RETRY_THRESHOLD,
+        
+    )
 
+   # app.nlp_controller=NLPController(vectordb_client=app.vectordb_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser)
+
+    app.nlp_controller=NLPController(vectordb_client=app.vectordb_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser,query_rewriter_agent=app.query_rewriter_agent)
 
 
 

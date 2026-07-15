@@ -150,7 +150,7 @@ async def rag_answer(request:Request,project_id:str,search_request:SearchRequest
     
     nlp_controller=request.app.nlp_controller 
 
-    response, full_prompt, chat_history=nlp_controller.answer_rag_question(project=project,query=search_request.text,limit=search_request.limit)
+    response, full_prompt=nlp_controller.answer_rag_question(project=project,query=search_request.text,limit=search_request.limit)
 
     if not response:
         return JSONResponse(

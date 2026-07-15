@@ -4,6 +4,7 @@ from src.stores.llm.templates.locales.en.rag import footer_prompt
 from .BaseController import BaseController
 from src.models.db_schema.data_chunk import DataChunk
 from src.models.db_schema.project import  project
+from src.models.db_schema.AgenticResponseModel import AgenticResponseModel
 from src.stores.vectordb.providers.QdrantDB import QdrantDB
 from src.models.ChunkModel import ChunkModel
 from src.stores.llm.LLMEnums import DocumentTypeEnum
@@ -13,9 +14,10 @@ from src.stores.llm.templates.template_parser import TemplateParser
 
 
 
+
 class NLPController(BaseController):
 
-    def __init__(self,vectordb_client,embedding_model,generation_model,template_parser:TemplateParser):
+    def __init__(self,vectordb_client,embedding_model,generation_model,query_rewriter_agent,template_parser:TemplateParser):
 
         super().__init__()
 
@@ -23,6 +25,7 @@ class NLPController(BaseController):
         self.embedding_model=embedding_model
         self.generation_model=generation_model
         self.template_parser=template_parser
+        self.query_rewriter_agent = query_rewriter_agent
 
     def create_collection_name(self,project_id:str):
         return f"collection_{project_id}".strip()    
@@ -96,13 +99,23 @@ class NLPController(BaseController):
 
         #step1 : retrieve related docs
 
-        retrieved_docs=self.search_vector_db_collection(
+        #retrieved_docs=self.search_vector_db_collection(
+         #   project=project,
+          #  text=query,
+           # limit=limit,
+        #)
+
+        #retrieved_docs, rewritten_query, attempt 
+        results= self.query_rewriter_agent.run(
+            query=query,
             project=project,
-            text=query,
-            limit=limit,
+            collection_name=self.create_collection_name(project.project_id),
+            limit=limit
         )
 
-        if not retrieved_docs:
+
+
+        if not results.retrieved_docs:
             return None
 
         # step 2 : construct LLM Prompt
@@ -110,29 +123,29 @@ class NLPController(BaseController):
 
         
         document_prompts="\n".join([
-            self.template_parser.get("rag","document_prompt",vars={"doc_num":idx,"chunk_text":doc.text})
-            for idx,doc in enumerate(retrieved_docs)
+            self.template_parser.get("rag","document_prompt",vars={"doc_num":idx,"chunk_text":doc})
+            for idx,doc in enumerate(results.retrieved_docs)
         ])
 
         footer_prompt=self.template_parser.get("rag","footer_prompt")
 
 
-        user_prompt=self.template_parser.get("rag", "user_query", vars={"user_query": query})
+        user_prompt=self.template_parser.get("rag", "user_query", vars={"user_query": results.rewritten})
 
         ####### REMINDER: CHAT HISTORY DOESNOT EXIST IN THE GENERTATE TEXT
-        chat_history=self.generation_model.construct_prompt(
-            prompt=system_prompt,
-            role=self.generation_model.enums.SYSTEM.value
+       # chat_history=self.generation_model.construct_prompt(
+        #    prompt=system_prompt,
+         #   role=self.generation_model.enums.SYSTEM.value
 
-        )
+        #)
 
         full_prompt="\n\n".join([document_prompts,user_prompt,footer_prompt])
 
-        #response=self.generation_model.generate_text(system_prompt=system_prompt, user_prompt=full_prompt)
+        response=self.generation_model.generate_text(system_prompt=system_prompt, user_prompt=full_prompt,max_output_tokens=self.generation_model.default_output_max_tokens)
 
-        response = self.generation_model.generate_text(
-        prompt=f"{system_prompt}\n\n{full_prompt}",
-        max_output_tokens=1024
-        )
+       # response = self.generation_model.generate_text(
+        #prompt=f"{system_prompt}\n\n{full_prompt}",
+        #max_output_tokens=1024
+        #)
 
-        return response, full_prompt, chat_history
+        return response, full_prompt

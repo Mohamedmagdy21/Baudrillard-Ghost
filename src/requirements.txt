@@ -12,3 +12,4 @@ asyncio==4.0.0
 openai==2.44.0
 cohere==7.0.5
 qdrant-client==1.18.0
+loguru==0.7.3
