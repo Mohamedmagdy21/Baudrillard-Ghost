@@ -5,12 +5,12 @@ from src.models.db_schema.data_chunk import RetrievedDocument
 from loguru import logger
 from src.models.db_schema.AgenticResponseModel import AgenticResponseModel
 
-from openai import OpenAI, max_retries
+from openai import OpenAI
 
 class OpenAiAgent(QueryRewriterAgentInterface):
 
     def __init__(self, api_key: str,generation_client,embedding_client,vectordb_client ,retry_threshold:float,base_url: str = None , temperature: float = 1,max_retries:int=1):
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=60.0) if base_url else OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=320.0) if base_url else OpenAI(api_key=api_key)
         self.generation_client = generation_client
         self.temperature = temperature
         self.embedding_client=embedding_client
@@ -117,11 +117,11 @@ class OpenAiAgent(QueryRewriterAgentInterface):
             # embed & search
             logger.info(f"[AGENT] Rewritten query: '{rewritten}'")
             vector = self.embedding_client.embed_text(rewritten, document_type=DocumentTypeEnum.Query.value)
-            docs = self.vectordb_client.search_by_vector(collection_name, vector, limit=5)
+            docs = self.vectordb_client.search_by_vector(collection_name, vector, limit=limit)
 
             # score should return
             passed,avg_score,retrieved = self.evaluate(retrieved_chunks= docs,threshold=self.retry_threshold)
-            logger.info(f"[AGENT] Attempt {attempt + 1}/{max_retries} - docs_found={bool(docs)} eval_passed={passed}")
+            logger.info(f"[AGENT] Attempt {attempt + 1}/{self.max_retries} - docs_found={bool(docs)} eval_passed={passed}")
 
             if passed:
                 history.append({"rewritten": rewritten, "avg_score":avg_score,"attempt":attempt+1,"retrieved_docs":retrieved})

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baudrillard's GHOST — RAG Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { ghost: { bg: '#0a0a0f', card: '#12121a', border: '#1e1e2e', accent: '#7c3aed', accent2: '#06b6d4' } } } }
+        }
+    </script>
+    <style>
+        * { scrollbar-width: thin; scrollbar-color: #1e1e2e transparent; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 3px; }
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner { border: 2px solid #1e1e2e; border-top-color: #7c3aed; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.6s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-ghost-bg text-gray-200 min-h-screen">
+
+<!-- Header -->
+<header class="border-b border-ghost-border bg-ghost-card/50 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-ghost-accent to-ghost-accent2 flex items-center justify-center font-bold text-white text-sm">BG</div>
+            <div>
+                <h1 class="text-sm font-semibold text-white">Baudrillard's GHOST</h1>
+                <p class="text-xs text-gray-500">RAG Pipeline Dashboard</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <input id="project-id" type="text" placeholder="project-id"
+                    class="bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-ghost-accent w-48 transition-colors">
+                <button onclick="saveProjectId()" class="text-xs text-ghost-accent2 hover:text-cyan-400 transition-colors">Save</button>
+            </div>
+            <div id="api-status" class="flex items-center gap-1.5 text-xs text-gray-500">
+                <span class="w-2 h-2 rounded-full bg-gray-600"></span> <span>idle</span>
+            </div>
+        </div>
+    </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-6 py-6 grid grid-cols-12 gap-6">
+
+    <!-- Left: Pipeline -->
+    <aside class="col-span-12 lg:col-span-4 space-y-4">
+
+        <!-- Upload -->
+        <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded bg-ghost-accent/20 text-ghost-accent flex items-center justify-center text-xs">1</span>
+                    Upload File
+                </h2>
+                <span id="upload-status" class="text-xs text-gray-600"></span>
+            </div>
+            <div id="drop-zone" class="border-2 border-dashed border-ghost-border rounded-lg p-6 text-center cursor-pointer hover:border-ghost-accent/50 transition-colors">
+                <p class="text-xs text-gray-500 mb-1">Drag & drop or click</p>
+                <p class="text-xs text-gray-600">PDF / TXT — max 100MB</p>
+                <input id="file-input" type="file" accept=".pdf,.txt" class="hidden">
+            </div>
+            <div id="upload-result" class="hidden mt-3 text-xs"></div>
+        </div>
+
+        <!-- Process -->
+        <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded bg-ghost-accent/20 text-ghost-accent flex items-center justify-center text-xs">2</span>
+                    Process & Chunk
+                </h2>
+                <span id="process-status" class="text-xs text-gray-600"></span>
+            </div>
+            <div class="space-y-2.5">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">File ID <span class="text-gray-600">(blank = all project files)</span></label>
+                    <input id="process-file-id" type="text" placeholder="auto from upload"
+                        class="w-full bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-ghost-accent transition-colors">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-500 block mb-1">Chunk Size</label>
+                        <input id="chunk-size" type="number" value="500"
+                            class="w-full bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 block mb-1">Reset?</label>
+                        <select id="do-reset-process" class="w-full bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors">
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="process-btn" onclick="processFile()" class="w-full bg-ghost-accent/20 hover:bg-ghost-accent/30 text-ghost-accent border border-ghost-accent/30 rounded-lg py-2 text-sm font-medium transition-colors">
+                    Process
+                </button>
+            </div>
+            <div id="process-result" class="hidden mt-3 text-xs"></div>
+        </div>
+
+        <!-- Index -->
+        <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded bg-ghost-accent/20 text-ghost-accent flex items-center justify-center text-xs">3</span>
+                    Index into Vector DB
+                </h2>
+                <span id="index-status" class="text-xs text-gray-600"></span>
+            </div>
+            <div class="flex items-center gap-2 mb-3">
+                <input id="do-reset-index" type="checkbox" class="accent-ghost-accent">
+                <label for="do-reset-index" class="text-xs text-gray-400">Reset collection before insert</label>
+            </div>
+            <button id="index-btn" onclick="pushIndex()" class="w-full bg-ghost-accent/20 hover:bg-ghost-accent/30 text-ghost-accent border border-ghost-accent/30 rounded-lg py-2 text-sm font-medium transition-colors">
+                Push & Index
+            </button>
+            <div id="index-result" class="hidden mt-3 text-xs"></div>
+        </div>
+
+        <!-- Collection Info -->
+        <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+                    <span class="w-5 h-5 rounded bg-ghost-accent2/20 text-ghost-accent2 flex items-center justify-center text-xs">i</span>
+                    Collection Info
+                </h2>
+                <button onclick="getCollectionInfo()" class="text-xs text-ghost-accent2 hover:text-cyan-400 transition-colors">Refresh</button>
+            </div>
+            <div id="collection-info" class="text-xs text-gray-500">No data — click Refresh.</div>
+        </div>
+    </aside>
+
+    <!-- Right: Query -->
+    <section class="col-span-12 lg:col-span-8 space-y-4">
+
+        <!-- Tabs -->
+        <div class="flex gap-1 bg-ghost-card border border-ghost-border rounded-xl p-1 w-fit">
+            <button id="tab-search" onclick="switchTab('search')" class="px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-ghost-accent/20 text-ghost-accent">Search</button>
+            <button id="tab-ask" onclick="switchTab('ask')" class="px-4 py-2 text-sm rounded-lg font-medium transition-colors text-gray-400 hover:text-gray-200 transition-colors">Ask (RAG)</button>
+        </div>
+
+        <!-- Search Panel -->
+        <div id="panel-search" class="space-y-4">
+            <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
+                <div class="flex gap-3">
+                    <input id="search-text" type="text" placeholder="Semantic search query..."
+                        class="flex-1 bg-ghost-bg border border-ghost-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-ghost-accent transition-colors"
+                        onkeydown="if(event.key==='Enter') doSearch()">
+                    <input id="search-limit" type="number" value="5" min="1" max="50"
+                        class="w-20 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors text-center">
+                    <button id="search-btn" onclick="doSearch()" class="bg-ghost-accent hover:bg-purple-600 text-white rounded-lg px-5 py-2.5 text-sm font-medium transition-colors">Search</button>
+                </div>
+                <p class="text-xs text-gray-600 mt-2">Limit applies to final results. Reranker over-fetches <span id="rerank-cands-label">20</span> and returns top N.</p>
+            </div>
+            <div id="search-results" class="space-y-2"></div>
+        </div>
+
+        <!-- Ask Panel -->
+        <div id="panel-ask" class="hidden space-y-4">
+            <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
+                <div class="flex gap-3">
+                    <input id="ask-text" type="text" placeholder="Ask a question..."
+                        class="flex-1 bg-ghost-bg border border-ghost-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-ghost-accent transition-colors"
+                        onkeydown="if(event.key==='Enter') doAsk()">
+                    <input id="ask-limit" type="number" value="5" min="1" max="50"
+                        class="w-20 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors text-center">
+                    <button id="ask-btn" onclick="doAsk()" class="bg-ghost-accent hover:bg-purple-600 text-white rounded-lg px-5 py-2.5 text-sm font-medium transition-colors">Ask</button>
+                </div>
+                <p class="text-xs text-gray-600 mt-2">Pipeline: Rewrite (qwen3:4b) → Embed → Vector Search → Rerank → Generate (GLM)</p>
+            </div>
+
+            <!-- Answer -->
+            <div id="ask-answer-wrap" class="hidden bg-ghost-card border border-ghost-border rounded-xl p-5 fade-in">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-white">Answer</h3>
+                    <button onclick="togglePrompt()" id="prompt-toggle" class="text-xs text-ghost-accent2 hover:text-cyan-400 transition-colors">Show prompt</button>
+                </div>
+                <div id="ask-answer" class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap"></div>
+                <div id="full-prompt" class="hidden mt-4 pt-4 border-t border-ghost-border">
+                    <pre class="text-xs text-gray-500 whitespace-pre-wrap max-h-96 overflow-y-auto"></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+const API = '';
+let promptVisible = false;
+
+// --- Project ID ---
+function getProjectId() {
+    const id = document.getElementById('project-id').value.trim();
+    if (!id) { alert('Enter a Project ID first.'); return null; }
+    return id;
+}
+function saveProjectId() {
+    const id = document.getElementById('project-id').value.trim();
+    if (id) { localStorage.setItem('ghost_project_id', id); flashStatus('saved'); }
+}
+function flashStatus(msg) {
+    const el = document.getElementById('api-status');
+    el.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-500"></span> <span>${msg}</span>`;
+    setTimeout(() => { el.innerHTML = `<span class="w-2 h-2 rounded-full bg-gray-600"></span> <span>idle</span>`; }, 2000);
+}
+function setLoading(btnId, loading, label) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (loading) {
+        btn.dataset.orig = btn.innerHTML;
+        btn.innerHTML = `<span class="spinner"></span>`;
+        btn.disabled = true;
+    } else {
+        btn.innerHTML = label || btn.dataset.orig || btn.innerHTML;
+        btn.disabled = false;
+    }
+}
+function showResult(elId, ok, html) {
+    const el = document.getElementById(elId);
+    el.classList.remove('hidden');
+    el.className = `mt-3 text-xs rounded-lg p-2.5 ${ok ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`;
+    el.innerHTML = html;
+}
+
+// --- File Upload ---
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-ghost-accent'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-ghost-accent'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('border-ghost-accent');
+    if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; uploadFile(); }
+});
+fileInput.addEventListener('change', uploadFile);
+
+async function uploadFile() {
+    const pid = getProjectId(); if (!pid) return;
+    const file = fileInput.files[0]; if (!file) return;
+    document.getElementById('upload-status').textContent = 'uploading...';
+    setLoading('process-btn', false);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const res = await fetch(`${API}/api/v1/data/upload/${pid}`, { method: 'POST', body: fd });
+        const data = await res.json();
+        if (res.ok && data.signal && data.signal.includes('success')) {
+            document.getElementById('process-file-id').value = data.file_id || '';
+            showResult('upload-result', true, `Uploaded: <strong>${data.file_id}</strong>`);
+            document.getElementById('upload-status').textContent = 'done';
+        } else {
+            showResult('upload-result', false, data.signal || 'Upload failed');
+            document.getElementById('upload-status').textContent = 'error';
+        }
+    } catch (e) { showResult('upload-result', false, e.message); document.getElementById('upload-status').textContent = 'error'; }
+}
+
+// --- Process ---
+async function processFile() {
+    const pid = getProjectId(); if (!pid) return;
+    const body = {
+        file_id: document.getElementById('process-file-id').value.trim() || null,
+        chunk_size: parseInt(document.getElementById('chunk-size').value) || 500,
+        do_reset: parseInt(document.getElementById('do-reset-process').value),
+    };
+    setLoading('process-btn', true);
+    document.getElementById('process-status').textContent = 'processing...';
+    try {
+        const res = await fetch(`${API}/api/v1/data/process/${pid}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok && data.signal && data.signal.includes('success')) {
+            showResult('process-result', true, `Chunks: <strong>${data['inserted_chunks ']}</strong> | Files: <strong>${data.processed_files}</strong>`);
+            document.getElementById('process-status').textContent = 'done';
+        } else {
+            showResult('process-result', false, data.signal || 'Processing failed');
+            document.getElementById('process-status').textContent = 'error';
+        }
+    } catch (e) { showResult('process-result', false, e.message); document.getElementById('process-status').textContent = 'error'; }
+    setLoading('process-btn', false);
+}
+
+// --- Push Index ---
+async function pushIndex() {
+    const pid = getProjectId(); if (!pid) return;
+    const body = { do_reset: document.getElementById('do-reset-index').checked ? 1 : 0 };
+    setLoading('index-btn', true);
+    document.getElementById('index-status').textContent = 'indexing...';
+    try {
+        const res = await fetch(`${API}/api/v1/nlp/push/index/${pid}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showResult('index-result', true, `Indexing complete: <strong>${JSON.stringify(data)}</strong>`);
+            document.getElementById('index-status').textContent = 'done';
+            getCollectionInfo();
+        } else {
+            showResult('index-result', false, data.signal || 'Indexing failed');
+            document.getElementById('index-status').textContent = 'error';
+        }
+    } catch (e) { showResult('index-result', false, e.message); document.getElementById('index-status').textContent = 'error'; }
+    setLoading('index-btn', false);
+}
+
+// --- Collection Info ---
+async function getCollectionInfo() {
+    const pid = getProjectId(); if (!pid) return;
+    const el = document.getElementById('collection-info');
+    el.textContent = 'Loading...';
+    try {
+        const res = await fetch(`${API}/api/v1/nlp/index/info/${pid}`);
+        const data = await res.json();
+        if (res.ok && data.collection_info) {
+            const ci = data.collection_info;
+            el.innerHTML = `
+                <div class="space-y-1">
+                    <div class="flex justify-between"><span class="text-gray-500">Collection</span><span class="text-gray-300">${ci.collection_name || ci.name || '—'}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Points</span><span class="text-gray-300">${ci.points_count ?? ci.vectors_count ?? '—'}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Distance</span><span class="text-gray-300">${ci.config?.params?.distance || ci.distance || '—'}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-500">Dim</span><span class="text-gray-300">${ci.config?.params?.vectors?.size || '—'}</span></div>
+                </div>`;
+        } else { el.textContent = data.signal || 'No collection found.'; }
+    } catch (e) { el.textContent = e.message; }
+}
+
+// --- Tabs ---
+function switchTab(tab) {
+    const s = document.getElementById('panel-search');
+    const a = document.getElementById('panel-ask');
+    const sb = document.getElementById('tab-search');
+    const ab = document.getElementById('tab-ask');
+    if (tab === 'search') {
+        s.classList.remove('hidden'); a.classList.add('hidden');
+        sb.className = 'px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-ghost-accent/20 text-ghost-accent';
+        ab.className = 'px-4 py-2 text-sm rounded-lg font-medium transition-colors text-gray-400 hover:text-gray-200 transition-colors';
+    } else {
+        s.classList.add('hidden'); a.classList.remove('hidden');
+        ab.className = 'px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-ghost-accent/20 text-ghost-accent';
+        sb.className = 'px-4 py-2 text-sm rounded-lg font-medium transition-colors text-gray-400 hover:text-gray-200 transition-colors';
+    }
+}
+
+// --- Search ---
+async function doSearch() {
+    const pid = getProjectId(); if (!pid) return;
+    const text = document.getElementById('search-text').value.trim();
+    if (!text) return;
+    const limit = parseInt(document.getElementById('search-limit').value) || 5;
+    setLoading('search-btn', true);
+    const container = document.getElementById('search-results');
+    container.innerHTML = `<div class="text-xs text-gray-500 p-4"><span class="spinner"></span> Searching...</div>`;
+    try {
+        const res = await fetch(`${API}/api/v1/nlp/index/search/${pid}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, limit })
+        });
+        const data = await res.json();
+        if (res.ok && data['retrieved list']) {
+            container.innerHTML = data['retrieved list'].map((doc, i) => `
+                <div class="bg-ghost-card border border-ghost-border rounded-xl p-4 fade-in">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-mono text-ghost-accent2">#${i + 1}</span>
+                        <span class="text-xs px-2 py-0.5 rounded bg-ghost-bg border border-ghost-border text-gray-400">
+                            score: ${doc.score !== null && doc.score !== undefined ? doc.score.toFixed(4) : '—'}${doc.rerank_score !== null && doc.rerank_score !== undefined ? ' | rerank: ' + doc.rerank_score.toFixed(4) : ''}
+                        </span>
+                    </div>
+                    <p class="text-sm text-gray-300 leading-relaxed">${escapeHtml(doc.text)}</p>
+                </div>`).join('');
+        } else {
+            container.innerHTML = `<div class="text-xs text-red-400 p-4">${data.signal || 'Search failed'}</div>`;
+        }
+    } catch (e) { container.innerHTML = `<div class="text-xs text-red-400 p-4">${e.message}</div>`; }
+    setLoading('search-btn', false);
+}
+
+// --- Ask (RAG) ---
+async function doAsk() {
+    const pid = getProjectId(); if (!pid) return;
+    const text = document.getElementById('ask-text').value.trim();
+    if (!text) return;
+    const limit = parseInt(document.getElementById('ask-limit').value) || 5;
+    setLoading('ask-btn', true);
+    document.getElementById('ask-answer-wrap').classList.add('hidden');
+    document.getElementById('full-prompt').classList.add('hidden');
+    promptVisible = false;
+    document.getElementById('prompt-toggle').textContent = 'Show prompt';
+    try {
+        const res = await fetch(`${API}/api/v1/nlp/index/answer/${pid}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, limit })
+        });
+        const data = await res.json();
+        if (res.ok && data.answer) {
+            document.getElementById('ask-answer-wrap').classList.remove('hidden');
+            document.getElementById('ask-answer').textContent = data.answer;
+            document.querySelector('#full-prompt pre').textContent = data.full_prompt || '';
+        } else {
+            document.getElementById('ask-answer-wrap').classList.remove('hidden');
+            document.getElementById('ask-answer').innerHTML = `<span class="text-red-400">${data.signal || 'Answer generation failed'}</span>`;
+        }
+    } catch (e) {
+        document.getElementById('ask-answer-wrap').classList.remove('hidden');
+        document.getElementById('ask-answer').innerHTML = `<span class="text-red-400">${e.message}</span>`;
+    }
+    setLoading('ask-btn', false);
+}
+
+function togglePrompt() {
+    promptVisible = !promptVisible;
+    const el = document.getElementById('full-prompt');
+    el.classList.toggle('hidden', !promptVisible);
+    document.getElementById('prompt-toggle').textContent = promptVisible ? 'Hide prompt' : 'Show prompt';
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+// --- Init ---
+window.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('ghost_project_id');
+    if (saved) document.getElementById('project-id').value = saved;
+});
+</script>
+</body>
+</html>

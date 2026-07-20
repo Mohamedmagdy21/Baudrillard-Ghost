@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from bson import ObjectId
+from .chunk_metadata import ChunkMetaData
 
 
 class DataChunk(BaseModel):
@@ -8,7 +9,7 @@ class DataChunk(BaseModel):
 
     id: Optional[str] = Field(default=None, alias="_id")
     chunk_text: str = Field(..., min_length=1)
-    chunk_metadata: dict
+    chunk_metadata: ChunkMetaData
     chunk_order: int = Field(..., gt=0)
     chunk_project_id: str
     chunk_asset_id:str
@@ -32,9 +33,17 @@ class DataChunk(BaseModel):
                 "unique":False
 
             }
-        ]     
+        ] 
+
+    @field_validator("chunk_metadata", mode="before")
+    @classmethod
+    def parse_metadata(cls, v):
+        if isinstance(v, dict):
+            return ChunkMetaData(**v)
+        return v        
 
 
 class RetrievedDocument(BaseModel):
     text:str
-    score:float
+    score:Optional[float]=None
+    rerank_score:Optional[float]=None

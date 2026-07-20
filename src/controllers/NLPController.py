@@ -17,7 +17,7 @@ from src.stores.llm.templates.template_parser import TemplateParser
 
 class NLPController(BaseController):
 
-    def __init__(self,vectordb_client,embedding_model,generation_model,query_rewriter_agent,template_parser:TemplateParser):
+    def __init__(self,vectordb_client,embedding_model,generation_model,query_rewriter_agent,template_parser:TemplateParser,reranker_client=None,rerank_top_n:int=5,reranker_candidates:int=20):
 
         super().__init__()
 
@@ -26,6 +26,9 @@ class NLPController(BaseController):
         self.generation_model=generation_model
         self.template_parser=template_parser
         self.query_rewriter_agent = query_rewriter_agent
+        self.reranker_client = reranker_client
+        self.rerank_top_n = rerank_top_n
+        self.reranker_candidates = reranker_candidates
 
     def create_collection_name(self,project_id:str):
         return f"collection_{project_id}".strip()    
@@ -97,20 +100,15 @@ class NLPController(BaseController):
 
     def answer_rag_question(self,project:project,query:str,limit:int): 
 
-        #step1 : retrieve related docs
+        #step1 : retrieve related docs (over-fetch if reranker is configured)
 
-        #retrieved_docs=self.search_vector_db_collection(
-         #   project=project,
-          #  text=query,
-           # limit=limit,
-        #)
+        search_limit = self.reranker_candidates if self.reranker_client else limit
 
-        #retrieved_docs, rewritten_query, attempt 
         results= self.query_rewriter_agent.run(
             query=query,
             project=project,
             collection_name=self.create_collection_name(project.project_id),
-            limit=limit
+            limit=search_limit
         )
 
 
@@ -118,13 +116,28 @@ class NLPController(BaseController):
         if not results.retrieved_docs:
             return None
 
+        # step 1.5 : rerank retrieved docs with cross-encoder if configured
+        if self.reranker_client:
+            top_n = self.rerank_top_n or limit
+            reranked = self.reranker_client.rerank(
+                query=results.rewritten,
+                documents=results.retrieved_docs,
+                top_n=top_n,
+            )
+            if reranked:
+                doc_texts = [doc.text for doc in reranked]
+            else:
+                doc_texts = results.retrieved_docs[:limit]
+        else:
+            doc_texts = results.retrieved_docs[:limit]
+
         # step 2 : construct LLM Prompt
         system_prompt=self.template_parser.get(group="rag",key="system_prompt",)   
 
         
         document_prompts="\n".join([
             self.template_parser.get("rag","document_prompt",vars={"doc_num":idx,"chunk_text":doc})
-            for idx,doc in enumerate(results.retrieved_docs)
+            for idx,doc in enumerate(doc_texts)
         ])
 
         footer_prompt=self.template_parser.get("rag","footer_prompt")

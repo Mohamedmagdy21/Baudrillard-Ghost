@@ -98,8 +98,7 @@ async def process_endpoint(request:Request,project_id:str,process_request:Proces
 
     file_id=process_request.file_id
 
-    chunk_size=process_request.chunk_size
-    overlap_size=process_request.overlap_size
+    max_chunk_size=process_request.chunk_size
 
     do_reset=process_request.do_reset
 
@@ -192,8 +191,8 @@ async def process_endpoint(request:Request,project_id:str,process_request:Proces
         file_chunks=await process_controller.process_file_content(
             file_content=file_content,
             file_id=file_id,
-            chunk_size=chunk_size,
-            overlap_size=overlap_size
+            embedding_client=request.app.embedding_client,
+            max_chunk_size=max_chunk_size
         )
 
         if file_chunks is None or len(file_chunks)==0:
@@ -206,9 +205,9 @@ async def process_endpoint(request:Request,project_id:str,process_request:Proces
             )
         file_chunks_records=[
             DataChunk(
-                chunk_text=chunk.page_content,
-                chunk_metadata=chunk.metadata,
-                chunk_order=i+1,
+                chunk_text=chunk["chunk_text"],
+                chunk_metadata=chunk["chunk_metadata"],
+                chunk_order=chunk.get("chunk_order", i + 1),
                 chunk_project_id=project.id,
                 chunk_asset_id=asset_id
             )

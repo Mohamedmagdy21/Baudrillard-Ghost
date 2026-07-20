@@ -1,6 +1,9 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+import os
 from src.routes import base
 from src.routes import data,nlp
 import asyncio
@@ -8,6 +11,7 @@ from pymongo import AsyncMongoClient # Native async client
 from src.helpers.config import get_settings
 from src.stores.llm.LLMProviderFactory import LLMProvideFactory
 from src.stores.vectordb.VectorDBFactory import VectorDBFactory
+from src.stores.reranker.RerankerFactory import RerankerFactory
 from src.models.AssetModel import AssetModel
 from src.models.ProjectModel import ProjectModel
 from src.models.ChunkModel import ChunkModel
@@ -15,6 +19,8 @@ from src.models.ResponseModel import ResponseModel
 from src.stores.llm.templates.template_parser import TemplateParser
 from src.controllers.NLPController import NLPController
 from src.agents.providers.OpenAiProvider import OpenAiAgent
+from sqlalchemy.ext.asyncio import create_async_engine,AsyncSession
+from sqlalchemy.orm import sessionmaker
 
 
 
@@ -23,8 +29,13 @@ async def lifespan(app: FastAPI):
 
     settings=get_settings()
 
+    #postgres_conn=f"postgresql+asyncpg://{settings.POSTGRES_USERNAME}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}/{settings.POSTGRES_MAIN_DATABASE}"
+    #app.db_engine=create_async_engine(postgres_conn)
+    #app.db_client=sessionmaker(app.db_engine,class_=AsyncSession)
+
     app.mongo_conn=AsyncMongoClient(settings.MONGO_URL)
     await app.mongo_conn.aconnect()
+
     app.db_client=app.mongo_conn[settings.MONGODB_DATABASE]
 
     app.project_model = await ProjectModel.create_instance(db_client=app.db_client)
@@ -73,9 +84,24 @@ async def lifespan(app: FastAPI):
         
     )
 
+    # reranker client (optional, set RERANKER_BACKEND in .env)
+    app.reranker_client = None
+    if settings.RERANKER_BACKEND:
+        reranker_factory = RerankerFactory(settings)
+        app.reranker_client = reranker_factory.create(provider=settings.RERANKER_BACKEND)
+
    # app.nlp_controller=NLPController(vectordb_client=app.vectordb_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser)
 
-    app.nlp_controller=NLPController(vectordb_client=app.vectordb_client,embedding_model=app.embedding_client,generation_model=app.generation_client,template_parser=app.template_parser,query_rewriter_agent=app.query_rewriter_agent)
+    app.nlp_controller=NLPController(
+        vectordb_client=app.vectordb_client,
+        embedding_model=app.embedding_client,
+        generation_model=app.generation_client,
+        template_parser=app.template_parser,
+        query_rewriter_agent=app.query_rewriter_agent,
+        reranker_client=app.reranker_client,
+        rerank_top_n=settings.RERANKER_TOP_N,
+        reranker_candidates=settings.RERANKER_CANDIDATES,
+    )
 
 
 
@@ -89,6 +115,12 @@ async def lifespan(app: FastAPI):
 
 app=FastAPI(lifespan=lifespan)
 
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
+
+
+@app.get("/ui")
+async def serve_ui():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "static", "index.html"))
 
 
 app.include_router(base.base_router)

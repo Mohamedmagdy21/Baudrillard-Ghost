@@ -107,8 +107,8 @@ class QdrantDB(VectorDBinterface):
             points=[ models.PointStruct(
                 id=batch_record_ids[x],
                 payload={
-                    "text":batch_text[x],
-                    **(batch_metadata[x] or {})
+                 "text": batch_text[x],
+                 **(batch_metadata[x].model_dump() if batch_metadata[x] else {})
                 },
                 vector=batch_vectors[x]
             )

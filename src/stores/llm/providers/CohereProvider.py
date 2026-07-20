@@ -75,13 +75,19 @@ class CohereProvider(LLMInterface):
         if document_type == DocumentTypeEnum.Query.value:
             input_type = CohereEnums.QUERY.value
 
-        response = self.client.embed(
-            texts=texts,
-            model=self.embedding_model,
-            input_type=input_type,
-            embedding_types=["float"],
-        )
-        return response.embeddings.float         
+        all_embeddings = []
+        batch_size = 96
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            response = self.client.embed(
+                texts=batch,
+                model=self.embedding_model,
+                input_type=input_type,
+                embedding_types=["float"],
+            )
+            all_embeddings.extend(response.embeddings.float)
+
+        return all_embeddings       
 
 
 

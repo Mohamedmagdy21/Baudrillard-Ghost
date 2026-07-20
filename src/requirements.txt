@@ -13,3 +13,8 @@ openai==2.44.0
 cohere==7.0.5
 qdrant-client==1.18.0
 loguru==0.7.3
+SQLAlchemy==2.0.51
+asyncpg==0.31.0
+unstructured[pdf]==0.24.1
+nltk==3.10.0
+numpy

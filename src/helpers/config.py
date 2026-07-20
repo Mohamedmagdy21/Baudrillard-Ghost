@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     MONGO_URL: str
     MONGODB_DATABASE: str
-
+    
     GENERATION_BACKEND: str
     EMBEDDING_BACKEND:str
     ZAI_API_KEY:str
@@ -40,6 +40,11 @@ class Settings(BaseSettings):
 
     RETRY_THRESHOLD:float
     MAX_RETRIES:int
+
+    RERANKER_BACKEND:str=None
+    RERANKER_MODEL:str=None
+    RERANKER_TOP_N:int=5
+    RERANKER_CANDIDATES:int=20
 
 
 
