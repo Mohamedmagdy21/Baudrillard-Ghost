@@ -143,7 +143,7 @@
         <!-- Tabs -->
         <div class="flex gap-1 bg-ghost-card border border-ghost-border rounded-xl p-1 w-fit">
             <button id="tab-search" onclick="switchTab('search')" class="px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-ghost-accent/20 text-ghost-accent">Search</button>
-            <button id="tab-ask" onclick="switchTab('ask')" class="px-4 py-2 text-sm rounded-lg font-medium transition-colors text-gray-400 hover:text-gray-200 transition-colors">Ask (RAG)</button>
+            <button id="tab-ask" onclick="switchTab('ask')" class="px-4 py-2 text-sm rounded-lg font-medium transition-colors text-gray-400 hover:text-gray-200 transition-colors">Chat</button>
         </div>
 
         <!-- Search Panel -->
@@ -162,30 +162,44 @@
             <div id="search-results" class="space-y-2"></div>
         </div>
 
-        <!-- Ask Panel -->
-        <div id="panel-ask" class="hidden space-y-4">
-            <div class="bg-ghost-card border border-ghost-border rounded-xl p-5">
-                <div class="flex gap-3">
-                    <input id="ask-text" type="text" placeholder="Ask a question..."
-                        class="flex-1 bg-ghost-bg border border-ghost-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-ghost-accent transition-colors"
-                        onkeydown="if(event.key==='Enter') doAsk()">
-                    <input id="ask-limit" type="number" value="5" min="1" max="50"
-                        class="w-20 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors text-center">
-                    <button id="ask-btn" onclick="doAsk()" class="bg-ghost-accent hover:bg-purple-600 text-white rounded-lg px-5 py-2.5 text-sm font-medium transition-colors">Ask</button>
+        <!-- Chat Panel -->
+        <div id="panel-ask" class="hidden flex flex-col h-[calc(100vh-160px)]">
+            <!-- Chat header -->
+            <div class="bg-ghost-card border border-ghost-border rounded-xl p-3 mb-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <button onclick="newChat()" class="text-xs bg-ghost-accent/20 hover:bg-ghost-accent/30 text-ghost-accent border border-ghost-accent/30 rounded-lg px-3 py-1.5 font-medium transition-colors">+ New Chat</button>
+                    <select id="session-selector" onchange="loadSession(this.value)" class="bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors">
+                        <option value="">— Select Session —</option>
+                    </select>
                 </div>
-                <p class="text-xs text-gray-600 mt-2">Pipeline: Rewrite (qwen3:4b) → Embed → Vector Search → Rerank → Generate (GLM)</p>
+                <div class="flex items-center gap-2">
+                    <input id="chat-limit" type="number" value="5" min="1" max="50"
+                        class="w-16 bg-ghost-bg border border-ghost-border rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-ghost-accent transition-colors text-center">
+                    <span class="text-xs text-gray-600">docs</span>
+                </div>
             </div>
 
-            <!-- Answer -->
-            <div id="ask-answer-wrap" class="hidden bg-ghost-card border border-ghost-border rounded-xl p-5 fade-in">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-semibold text-white">Answer</h3>
-                    <button onclick="togglePrompt()" id="prompt-toggle" class="text-xs text-ghost-accent2 hover:text-cyan-400 transition-colors">Show prompt</button>
+            <!-- Messages area -->
+            <div id="chat-messages" class="flex-1 overflow-y-auto space-y-4 pr-2">
+                <div id="chat-empty" class="flex items-center justify-center h-full text-center">
+                    <div>
+                        <div class="text-4xl mb-3 opacity-20">🟢</div>
+                        <p class="text-sm text-gray-600">Ask a question to start a conversation</p>
+                        <p class="text-xs text-gray-700 mt-1">Rewrite → Embed → Search → Rerank → Generate</p>
+                    </div>
                 </div>
-                <div id="ask-answer" class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap"></div>
-                <div id="full-prompt" class="hidden mt-4 pt-4 border-t border-ghost-border">
-                    <pre class="text-xs text-gray-500 whitespace-pre-wrap max-h-96 overflow-y-auto"></pre>
+            </div>
+
+            <!-- Input area -->
+            <div class="bg-ghost-card border border-ghost-border rounded-xl p-3 mt-3">
+                <div class="flex gap-3 items-end">
+                    <textarea id="chat-input" rows="1" placeholder="Message the Ghost..."
+                        class="flex-1 bg-ghost-bg border border-ghost-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-ghost-accent transition-colors resize-none"
+                        onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendChat(); }"
+                        oninput="autoResize(this)"></textarea>
+                    <button id="chat-send-btn" onclick="sendChat()" class="bg-ghost-accent hover:bg-purple-600 text-white rounded-lg px-5 py-2.5 text-sm font-medium transition-colors whitespace-nowrap">Send</button>
                 </div>
+                <p class="text-xs text-gray-700 mt-1.5">Enter to send • Shift+Enter for newline</p>
             </div>
         </div>
     </section>
@@ -193,7 +207,6 @@
 
 <script>
 const API = '';
-let promptVisible = false;
 
 // --- Project ID ---
 function getProjectId() {
@@ -347,6 +360,7 @@ function switchTab(tab) {
         s.classList.add('hidden'); a.classList.remove('hidden');
         ab.className = 'px-4 py-2 text-sm rounded-lg font-medium transition-colors bg-ghost-accent/20 text-ghost-accent';
         sb.className = 'px-4 py-2 text-sm rounded-lg font-medium transition-colors text-gray-400 hover:text-gray-200 transition-colors';
+        refreshSessions();
     }
 }
 
@@ -383,43 +397,148 @@ async function doSearch() {
     setLoading('search-btn', false);
 }
 
-// --- Ask (RAG) ---
-async function doAsk() {
-    const pid = getProjectId(); if (!pid) return;
-    const text = document.getElementById('ask-text').value.trim();
-    if (!text) return;
-    const limit = parseInt(document.getElementById('ask-limit').value) || 5;
-    setLoading('ask-btn', true);
-    document.getElementById('ask-answer-wrap').classList.add('hidden');
-    document.getElementById('full-prompt').classList.add('hidden');
-    promptVisible = false;
-    document.getElementById('prompt-toggle').textContent = 'Show prompt';
-    try {
-        const res = await fetch(`${API}/api/v1/nlp/index/answer/${pid}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, limit })
-        });
-        const data = await res.json();
-        if (res.ok && data.answer) {
-            document.getElementById('ask-answer-wrap').classList.remove('hidden');
-            document.getElementById('ask-answer').textContent = data.answer;
-            document.querySelector('#full-prompt pre').textContent = data.full_prompt || '';
-        } else {
-            document.getElementById('ask-answer-wrap').classList.remove('hidden');
-            document.getElementById('ask-answer').innerHTML = `<span class="text-red-400">${data.signal || 'Answer generation failed'}</span>`;
-        }
-    } catch (e) {
-        document.getElementById('ask-answer-wrap').classList.remove('hidden');
-        document.getElementById('ask-answer').innerHTML = `<span class="text-red-400">${e.message}</span>`;
-    }
-    setLoading('ask-btn', false);
+// --- Chat (RAG) ---
+let currentSessionId = null;
+let chatMessages = [];
+
+function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-function togglePrompt() {
-    promptVisible = !promptVisible;
-    const el = document.getElementById('full-prompt');
-    el.classList.toggle('hidden', !promptVisible);
-    document.getElementById('prompt-toggle').textContent = promptVisible ? 'Hide prompt' : 'Show prompt';
+function scrollToBottom() {
+    const container = document.getElementById('chat-messages');
+    container.scrollTop = container.scrollHeight;
+}
+
+function renderMessages() {
+    const container = document.getElementById('chat-messages');
+    const empty = document.getElementById('chat-empty');
+
+    if (chatMessages.length === 0) {
+        empty.classList.remove('hidden');
+        container.querySelectorAll('.chat-msg').forEach(el => el.remove());
+        return;
+    }
+    empty.classList.add('hidden');
+    container.querySelectorAll('.chat-msg').forEach(el => el.remove());
+
+    chatMessages.forEach(msg => {
+        const wrap = document.createElement('div');
+        wrap.className = `chat-msg flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} fade-in`;
+        const bubble = document.createElement('div');
+        bubble.className = msg.role === 'user'
+            ? 'max-w-[80%] bg-ghost-accent/20 border border-ghost-accent/30 rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm text-gray-100 whitespace-pre-wrap'
+            : 'max-w-[80%] bg-ghost-card border border-ghost-border rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-gray-300 whitespace-pre-wrap';
+        bubble.textContent = msg.content;
+        wrap.appendChild(bubble);
+        container.appendChild(wrap);
+    });
+    scrollToBottom();
+}
+
+function addTypingIndicator() {
+    const container = document.getElementById('chat-messages');
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg flex justify-start fade-in';
+    wrap.id = 'typing-indicator';
+    wrap.innerHTML = `<div class="bg-ghost-card border border-ghost-border rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-gray-500"><span class="spinner"></span> thinking...</div>`;
+    container.appendChild(wrap);
+    scrollToBottom();
+}
+
+function removeTypingIndicator() {
+    const el = document.getElementById('typing-indicator');
+    if (el) el.remove();
+}
+
+async function sendChat() {
+    const pid = getProjectId(); if (!pid) return;
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const limit = parseInt(document.getElementById('chat-limit').value) || 5;
+
+    chatMessages.push({ role: 'user', content: text });
+    renderMessages();
+    input.value = '';
+    autoResize(input);
+
+    setLoading('chat-send-btn', true);
+    addTypingIndicator();
+
+    try {
+        const body = { text, limit };
+        if (currentSessionId) body.session_id = currentSessionId;
+
+        const res = await fetch(`${API}/api/v1/nlp/chat/${pid}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        let data;
+        try { data = await res.json(); }
+        catch (e) { data = { signal: `Server error (${res.status})` }; }
+
+        removeTypingIndicator();
+
+        if (res.ok && data.answer) {
+            chatMessages.push({ role: 'assistant', content: data.answer });
+            if (data.session_id && data.session_id !== currentSessionId) {
+                currentSessionId = data.session_id;
+                localStorage.setItem('ghost_session_id', currentSessionId);
+            }
+        } else {
+            chatMessages.push({ role: 'assistant', content: `[Error: ${data.signal || 'generation failed'}]` });
+        }
+    } catch (e) {
+        removeTypingIndicator();
+        chatMessages.push({ role: 'assistant', content: `[Error: ${e.message}]` });
+    }
+    renderMessages();
+    setLoading('chat-send-btn', false);
+}
+
+function newChat() {
+    currentSessionId = null;
+    chatMessages = [];
+    localStorage.removeItem('ghost_session_id');
+    renderMessages();
+    document.getElementById('chat-input').focus();
+    refreshSessions();
+}
+
+async function refreshSessions() {
+    const pid = getProjectId(); if (!pid) return;
+    const selector = document.getElementById('session-selector');
+    try {
+        const res = await fetch(`${API}/api/v1/nlp/sessions/${pid}`);
+        const data = await res.json();
+        const sessions = data.sessions || [];
+        const current = selector.value;
+        selector.innerHTML = '<option value="">— Select Session —</option>' +
+            sessions.map(s => `<option value="${s.session_id}" ${s.session_id === currentSessionId ? 'selected' : ''}>${escapeHtml(s.last_query.slice(0, 40))} (${s.message_count} msgs)</option>`).join('');
+        if (currentSessionId) selector.value = currentSessionId;
+    } catch (e) {}
+}
+
+async function loadSession(sessionId) {
+    if (!sessionId) return;
+    const pid = getProjectId(); if (!pid) return;
+    currentSessionId = sessionId;
+    localStorage.setItem('ghost_session_id', sessionId);
+
+    try {
+        const res = await fetch(`${API}/api/v1/nlp/session/${sessionId}`);
+        const data = await res.json();
+        const messages = data.messages || [];
+        chatMessages = [];
+        for (const msg of messages) {
+            chatMessages.push({ role: 'user', content: msg.user_query });
+            chatMessages.push({ role: 'assistant', content: msg.output_text });
+        }
+        renderMessages();
+    } catch (e) { alert('Failed to load session: ' + e.message); }
 }
 
 function escapeHtml(s) {
@@ -430,6 +549,8 @@ function escapeHtml(s) {
 window.addEventListener('DOMContentLoaded', () => {
     const saved = localStorage.getItem('ghost_project_id');
     if (saved) document.getElementById('project-id').value = saved;
+    const savedSession = localStorage.getItem('ghost_session_id');
+    if (savedSession) currentSessionId = savedSession;
 });
 </script>
 </body>

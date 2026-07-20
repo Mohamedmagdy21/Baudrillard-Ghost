@@ -94,8 +94,7 @@ class CohereProvider(LLMInterface):
     def process_text(self, text: str) -> str:
         return text[:self.default_input_max_tokens].strip()          
 
-    def generate_text(self, prompt: str,max_output_tokens:int,chat_history: list=[], temperature: float = None) -> str:
-
+    def generate_text(self, system_prompt: str = None, user_prompt: str = None, max_output_tokens: int = None, temperature: float = None, chat_history: list = None) -> str:
         if not self.client:
             self.logger.error("Client not initialized")
             return None
@@ -111,14 +110,23 @@ class CohereProvider(LLMInterface):
         if not temperature:
             temperature=self.default_temperature
 
-        response=self.client.chat(
-            model=self.generation_model,
-            #chat_history=chat_history,
-            messages=[{"role": "user", "content": self.process_text(prompt)}],
-            temperature=temperature,
-            max_tokens=max_output_tokens
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if chat_history:
+            messages.extend(chat_history)
+        messages.append({"role": "user", "content": self.process_text(user_prompt or "")})
 
-        )  
+        try:
+            response=self.client.chat(
+                model=self.generation_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_output_tokens
+            )
+        except Exception as e:
+            self.logger.error(f"Generation API error: {e}")
+            return None
 
         if not response or not response.message.content:
             self.logger.error("Failed to generate text")

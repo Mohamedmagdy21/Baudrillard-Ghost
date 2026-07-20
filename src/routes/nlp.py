@@ -3,7 +3,7 @@ from fastapi import FastAPI, APIRouter, Depends, UploadFile, status, Request
 import os
 from fastapi.responses import JSONResponse
 import logging
-from .schemes.nlp import PushRequest, SearchRequest
+from .schemes.nlp import PushRequest, SearchRequest, ChatRequest
 from src.models.ProjectModel import ProjectModel
 from src.models.ChunkModel import ChunkModel
 from src.controllers.NLPController import NLPController
@@ -165,5 +165,92 @@ async def rag_answer(request:Request,project_id:str,search_request:SearchRequest
             "signal": ResponseSignal.RAG_ANSWER_SUCCESS.value,
             "answer": response,
             "full_prompt":full_prompt
+        }
+    )
+
+
+@nlp_router.post("/chat/{project_id}")
+async def chat(request: Request, project_id: str, chat_request: ChatRequest):
+
+    project_model = request.app.project_model
+
+    project = await project_model.get_project_or_create_one(
+        project_id=project_id
+    )
+
+    nlp_controller = request.app.nlp_controller
+
+    response, full_prompt, session_id = await nlp_controller.chat_rag_question(
+        project=project,
+        query=chat_request.text,
+        limit=chat_request.limit,
+        session_id=chat_request.session_id
+    )
+
+    if not response:
+        return JSONResponse(
+            content={
+                "signal": "No data indexed for this project. Upload a file, process it, and push to index first."
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return JSONResponse(
+        content={
+            "signal": ResponseSignal.RAG_ANSWER_SUCCESS.value,
+            "answer": response,
+            "full_prompt": full_prompt,
+            "session_id": session_id
+        }
+    )
+
+
+@nlp_router.get("/sessions/{project_id}")
+async def get_sessions(request: Request, project_id: str):
+
+    project_model = request.app.project_model
+
+    project = await project_model.get_project_or_create_one(
+        project_id=project_id
+    )
+
+    response_model = request.app.response_model
+
+    sessions = await response_model.get_sessions_by_project(project_id=project.id)
+
+    return JSONResponse(
+        content={
+            "signal": ResponseSignal.VECTOR_COLLECTION_RETRIEVED.value,
+            "sessions": sessions
+        }
+    )
+
+
+@nlp_router.get("/session/{session_id}")
+async def get_session_messages(request: Request, session_id: str):
+
+    response_model = request.app.response_model
+
+    messages = await response_model.get_messages_by_session(session_id=session_id)
+
+    return JSONResponse(
+        content={
+            "signal": ResponseSignal.VECTOR_COLLECTION_RETRIEVED.value,
+            "messages": [m.model_dump() for m in messages]
+        }
+    )
+
+
+@nlp_router.delete("/session/{session_id}")
+async def delete_session(request: Request, session_id: str):
+
+    response_model = request.app.response_model
+
+    deleted_count = await response_model.delete_session(session_id=session_id)
+
+    return JSONResponse(
+        content={
+            "signal": ResponseSignal.VECTOR_COLLECTION_RETRIEVED.value,
+            "deleted_count": deleted_count
         }
     )

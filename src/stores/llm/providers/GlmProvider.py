@@ -34,7 +34,7 @@ class GlmProvider(LLMInterface):
     def process_text(self, text: str) -> str:
         return text[:self.default_input_max_tokens].strip()
 
-    def generate_text(self, system_prompt: str, user_prompt: str, max_output_tokens: int,temperature:float=None) -> str:
+    def generate_text(self, system_prompt: str, user_prompt: str, max_output_tokens: int,temperature:float=None, chat_history:list=None) -> str:
         if not self.client:
             self.logger.error("Client not initialized")
             return None
@@ -49,14 +49,18 @@ class GlmProvider(LLMInterface):
         if not temperature:
             temperature = self.default_temperature
 
-        prompt = self.construct_prompt(system_prompt, user_prompt)    
+        prompt = self.construct_prompt(system_prompt, user_prompt, chat_history=chat_history or [])    
 
-        response = self.client.chat.completions.create(
-            model=self.generation_model,
-            messages=prompt,
-            max_tokens=max_output_tokens,
-            temperature=temperature,
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.generation_model,
+                messages=prompt,
+                max_tokens=max_output_tokens,
+                temperature=temperature,
+            )
+        except Exception as e:
+            self.logger.error(f"Generation API error: {e}")
+            return None
 
         if not response or not response.choices:
             self.logger.error("Failed to generate text")
@@ -89,17 +93,22 @@ class GlmProvider(LLMInterface):
 
         return response.data[0].embedding
 
-    def construct_prompt(self, system_prompt: str, user_prompt: str, role:str=None) -> str:
+    def construct_prompt(self, system_prompt: str, user_prompt: str, role:str=None, chat_history:list=None) -> str:
         final_prompt=[
             {
             "role": OpenAiEnums.System.value,
             "content": system_prompt
             },
-            {
+            ]
+
+        if chat_history:
+            for msg in chat_history:
+                final_prompt.append(msg)
+
+        final_prompt.append({
             "role": OpenAiEnums.USER.value,
             "content": self.process_text(user_prompt)
-            }
-            ]
+            })
             
         return final_prompt
 

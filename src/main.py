@@ -101,6 +101,7 @@ async def lifespan(app: FastAPI):
         reranker_client=app.reranker_client,
         rerank_top_n=settings.RERANKER_TOP_N,
         reranker_candidates=settings.RERANKER_CANDIDATES,
+        response_model=app.response_model,
     )
 
 
